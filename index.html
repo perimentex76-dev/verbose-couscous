@@ -1,53 +1,226 @@
-Creado por MinnieKawaiiTutos
-[Version]
-signature="$CHICAGO$"
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Brick Breaker</title>
+    <style>
+        body {
+            margin: 0;
+            background-color: #121212;
+            color: #ffffff;
+            font-family: sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            overflow: hidden;
+            touch-action: none;
+        }
+        canvas {
+            background: #1e1e1e;
+            display: block;
+            box-shadow: 0 0 20px rgba(0,0,0,0.8);
+            max-width: 100%;
+            max-height: 70vh;
+        }
+        #ui {
+            position: absolute;
+            text-align: center;
+            display: none;
+        }
+        #ui text {
+            font-size: 28px;
+            font-weight: bold;
+            display: block;
+            margin-bottom: 20px;
+            word-break: break-all;
+            padding: 0 10px;
+        }
+        #restartBtn {
+            padding: 12px 24px;
+            font-size: 18px;
+            background-color: #333;
+            color: #fff;
+            border: 1px solid #555;
+            cursor: pointer;
+            outline: none;
+            webkit-tap-highlight-color: transparent;
+        }
+        #restartBtn:active {
+            background-color: #444;
+        }
+    </style>
+</head>
+<body>
 
-[DefaultInstall]
-CopyFiles = Scheme.Cur, Scheme.Txt
-AddReg    = Scheme.Reg
+<canvas id="gameCanvas" width="480" height="320"></canvas>
 
-[DestinationDirs]
-Scheme.Cur = 10,"%CUR_DIR%"
-Scheme.Txt = 10,"%CUR_DIR%"
+<div id="ui">
+    <div id="msg" style="font-size: 24px; font-weight: bold; margin-bottom: 20px; word-break: break-all; max-width: 90vw;"></div>
+    <button id="restartBtn">RESTART</button>
+</div>
 
-[Scheme.Reg]
-HKCU,"Control Panel\Cursors\Schemes","%SCHEME_NAME%",,"%10%\%CUR_DIR%\%pointer%,%10%\%CUR_DIR%\%help%,%10%\%CUR_DIR%\%work%,%10%\%CUR_DIR%\%busy%,%10%\%CUR_DIR%\%Cross%,%10%\%CUR_DIR%\%Text%,%10%\%CUR_DIR%\%Hand%,%10%\%CUR_DIR%\%Unavailiable%,%10%\%CUR_DIR%\%Vert%,%10%\%CUR_DIR%\%Horz%,%10%\%CUR_DIR%\%Dgn1%,%10%\%CUR_DIR%\%Dgn2%,%10%\%CUR_DIR%\%move%,%10%\%CUR_DIR%\%alternate%,%10%\%CUR_DIR%\%link%"
-HKLM,"SOFTWARE\Microsoft\Windows\CurrentVersion\Runonce\Setup\","",,"rundll32.exe shell32.dll,Control_RunDLL main.cpl,,1"
+<script>
+const canvas = document.getElementById("gameCanvas");
+const ctx = canvas.getContext("2d");
+const ui = document.getElementById("ui");
+const msg = document.getElementById("msg");
+const restartBtn = document.getElementById("restartBtn");
 
-; -- Common Information
+// 공
+let ballRadius = 8;
+let x, y, dx, dy;
 
-[Scheme.Cur]
-normal.cur
-ayuda.cur
-trabajando en segundo plano.cur
-Ocupado.cur
-texto.cur
-No Disponible.cur
-vertical1.cur
-horizontal.cur
-diagonal resize 1.cur
-diagonal resize 2.cur
-Movee2.cur
-link.ani
-precision.cur
-Escritura a Mano.cur
-Alternative2.cur
+// 패들
+const paddleHeight = 10;
+const paddleWidth = 75;
+let paddleX;
 
-[Strings]
-CUR_DIR       = "Cursors\Cursor Cat"
-SCHEME_NAME   = "Cursor Cat"
-pointer       = "normal.cur"
-help          = "ayuda.cur"
-work          = "trabajando en segundo plano.cur"
-busy          = "Ocupado.cur"
-text          = "texto.cur"
-unavailiable  = "No Disponible.cur"
-vert          = "vertical1.cur"
-horz          = "horizontal.cur"
-dgn1          = "diagonal resize 1.cur"
-dgn2          = "diagonal resize 2.cur"
-move          = "Movee2.cur"
-link          = "link.ani"
-cross         = "precision.cur"
-hand          = "Escritura a Mano.cur"
-alternate     = "Alternative2.cur"
+// 벽돌
+const rowCount = 3;
+const columnCount = 5;
+const brickWidth = 75;
+const brickHeight = 20;
+const brickPadding = 10;
+const brickOffsetTop = 30;
+const brickOffsetLeft = 30;
+let bricks = [];
+
+let gameOver = false;
+
+function init() {
+    x = canvas.width / 2;
+    y = canvas.height - 30;
+    dx = 3;
+    dy = -3;
+    paddleX = (canvas.width - paddleWidth) / 2;
+
+    bricks = [];
+    for (let c = 0; c < columnCount; c++) {
+        bricks[c] = [];
+        for (let r = 0; r < rowCount; r++) {
+            bricks[c][r] = { x: 0, y: 0, status: 1 };
+        }
+    }
+    gameOver = false;
+    ui.style.display = "none";
+    draw();
+}
+
+// 모바일 터치 이동
+document.addEventListener("touchmove", (e) => {
+    const relativeX = e.touches[0].clientX - canvas.offsetLeft;
+    if (relativeX > 0 && relativeX < canvas.width) {
+        paddleX = relativeX - paddleWidth / 2;
+    }
+}, { passive: true });
+
+// 마우스 이동
+document.addEventListener("mousemove", (e) => {
+    const relativeX = e.clientX - canvas.offsetLeft;
+    if (relativeX > 0 && relativeX < canvas.width) {
+        paddleX = relativeX - paddleWidth / 2;
+    }
+});
+
+function collisionDetection() {
+    let count = 0;
+    for (let c = 0; c < columnCount; c++) {
+        for (let r = 0; r < rowCount; r++) {
+            let b = bricks[c][r];
+            if (b.status === 1) {
+                count++;
+                if (x > b.x && x < b.x + brickWidth && y > b.y && y < b.y + brickHeight) {
+                    dy = -dy;
+                    b.status = 0;
+                    count--;
+                }
+            }
+        }
+    }
+    if (count === 0 && !gameOver) {
+        endGame("https://rvfrvvfv.qshop.ai/");
+    }
+}
+
+function endGame(text) {
+    gameOver = true;
+    msg.innerText = text;
+    ui.style.display = "block";
+}
+
+function drawBall() {
+    ctx.beginPath();
+    ctx.arc(x, y, ballRadius, 0, Math.PI * 2);
+    ctx.fillStyle = "#ffffff";
+    ctx.fill();
+    ctx.closePath();
+}
+
+function drawPaddle() {
+    ctx.beginPath();
+    ctx.rect(paddleX, canvas.height - paddleHeight, paddleWidth, paddleHeight);
+    ctx.fillStyle = "#aaaaaa";
+    ctx.fill();
+    ctx.closePath();
+}
+
+function drawBricks() {
+    for (let c = 0; c < columnCount; c++) {
+        for (let r = 0; r < rowCount; r++) {
+            if (bricks[c][r].status === 1) {
+                let brickX = (c * (brickWidth + brickPadding)) + brickOffsetLeft;
+                let brickY = (r * (brickHeight + brickPadding)) + brickOffsetTop;
+                bricks[c][r].x = brickX;
+                bricks[c][r].y = brickY;
+                ctx.beginPath();
+                ctx.rect(brickX, brickY, brickWidth, brickHeight);
+                ctx.fillStyle = "#555555";
+                ctx.fill();
+                ctx.closePath();
+            }
+        }
+    }
+}
+
+function draw() {
+    if (gameOver) return;
+
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    drawBricks();
+    drawBall();
+    drawPaddle();
+    collisionDetection();
+
+    if (x + dx > canvas.width - ballRadius || x + dx < ballRadius) {
+        dx = -dx;
+    }
+    if (y + dy < ballRadius) {
+        dy = -dy;
+    } else if (y + dy > canvas.height - ballRadius) {
+        if (x > paddleX && x < paddleX + paddleWidth) {
+            dy = -dy;
+        } else {
+            endGame("Game over");
+            return;
+        }
+    }
+
+    x += dx;
+    y += dy;
+    requestAnimationFrame(draw);
+}
+
+restartBtn.addEventListener("click", init);
+restartBtn.addEventListener("touchstart", (e) => {
+    e.preventDefault();
+    init();
+});
+
+init();
+</script>
+
+</body>
+</html>
