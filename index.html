@@ -109,20 +109,29 @@ function init() {
     draw();
 }
 
-// 모바일 터치 이동
+// 모바일 화면 비율 맞춤 터치 이동 (캔버스 밖에서도 끝까지 이동 가능하도록 수정)
 document.addEventListener("touchmove", (e) => {
-    const relativeX = e.touches[0].clientX - canvas.offsetLeft;
-    if (relativeX > 0 && relativeX < canvas.width) {
-        paddleX = relativeX - paddleWidth / 2;
-    }
+    const rect = canvas.getBoundingClientRect();
+    const touchX = e.touches[0].clientX - rect.left;
+    const relativeX = touchX * (canvas.width / rect.width);
+    
+    paddleX = relativeX - paddleWidth / 2;
+    
+    // 벽 제한 보정
+    if (paddleX < 0) paddleX = 0;
+    if (paddleX > canvas.width - paddleWidth) paddleX = canvas.width - paddleWidth;
 }, { passive: true });
 
-// 마우스 이동
+// 마우스 이동 보정
 document.addEventListener("mousemove", (e) => {
-    const relativeX = e.clientX - canvas.offsetLeft;
-    if (relativeX > 0 && relativeX < canvas.width) {
-        paddleX = relativeX - paddleWidth / 2;
-    }
+    const rect = canvas.getBoundingClientRect();
+    const mouseX = e.clientX - rect.left;
+    const relativeX = mouseX * (canvas.width / rect.width);
+    
+    paddleX = relativeX - paddleWidth / 2;
+    
+    if (paddleX < 0) paddleX = 0;
+    if (paddleX > canvas.width - paddleWidth) paddleX = canvas.width - paddleWidth;
 });
 
 function collisionDetection() {
